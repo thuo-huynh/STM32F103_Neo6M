@@ -16,6 +16,8 @@ static void MX_GPIO_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART3_UART_Init(void);
 float lat, lon, velocity;
+int Nmea_Line1 = 1;
+int Nmea_Line2 = 0;
 char ch;
 /*_______________________________GPS_Struct_____________________________________*/
 struct nmeaMessage_t{
@@ -65,7 +67,7 @@ int Search_Char(unsigned char Char, char *Str, unsigned char Time, int Len);
 unsigned char GPS_DeviceInfo(char* time, char* status, char* latitude, char* S_N, 
 														 char* longitude, char* E_W, char* speed, char* dir, char* date);
 void CLEAR_GPS_RX_Buffer(void);
-//void Processing_$GPGRMC();
+void Processing_$GPGRMC(void);
 void Processing_$GPGVTG(void);
 /*________________________________GPS_Function__________________________________*/
 // Ham xoa ki tu trong chuoi
@@ -124,7 +126,6 @@ unsigned char GPS_DeviceInfo(char* time, char* status, char* latitude, char* S_N
   // printf("%d\n",Temp1);
 	Temp2 = Search_Char(',',nmeaMessage.GPS_RX_Buffer,2,GPS_BUFFER_SIZE);	//Tim vi tri co ',' lan 2
   // printf("%d\n",Temp2);
-  // printf("%c\n",nmeaMessage.GPS_RX_Buffer[Temp2]);
 	if(nmeaMessage.GPS_RX_Buffer[Temp2] == 'V'){
 		return 0;
 	}
@@ -158,9 +159,9 @@ unsigned char GPS_DeviceInfo(char* time, char* status, char* latitude, char* S_N
 	  lon = atof(dataGps.Longtitude);
 //-------------------------------------------------------------------------------------------------			
 		//LAY VAN TOC:
-		Temp1 = Search_Char(',',nmeaMessage.GPS_VTG_Buffer,7,GPS_VTG_SIZE);	 //Tim vi tri co ',' lan 3
+		Temp1 = Search_Char(',',nmeaMessage.GPS_VTG_Buffer,7,GPS_VTG_SIZE);	 //Tim vi tri co ',' lan 7
 		//printf("%d\n",Temp1);
-		Temp2 = Search_Char(',',nmeaMessage.GPS_VTG_Buffer,8,GPS_VTG_SIZE);	//Tim vi tri co ',' lan 4
+		Temp2 = Search_Char(',',nmeaMessage.GPS_VTG_Buffer,8,GPS_VTG_SIZE);	//Tim vi tri co ',' lan 8
 	  //	printf("%d\n",Temp2);
 		//Tach chuoi van toc
 		k = 0;
@@ -186,10 +187,8 @@ void Scan_for_dots(){
 }
 /*_____________________________________________________________________________________________*/
 
-int dong1 = 1;
-int dong2 = 0;
 void Processing_$GPGRMC(){
-	if(dong1 == 1){
+	if(Nmea_Line1 == 1){
 	if (ch == '$'){
 		nmeaMessage.GPS_Counter = 1;
 		nmeaMessage.GPS_RX_Buffer[nmeaMessage.GPS_Counter-1] = '$';
@@ -225,9 +224,16 @@ void Processing_$GPGRMC(){
 	}
 	if (ch == '*'){
 		if (nmeaMessage.GPS_Flag == 3){
-			printf("%s\n", nmeaMessage.GPS_RX_Buffer);
-			dong1 = 0; 
-			dong2 = 1;
+			statusGps.GPS_ans_stt = GPS_DeviceInfo(dataGps.Time, dataGps.Status, dataGps.Latitude, dataGps.S_N, 
+																				 dataGps.Longtitude, dataGps.E_W, dataGps.Speed, dataGps.Dir, dataGps.Date);
+			if(statusGps.GPS_ans_stt){
+				printf("Kinh do: %s\n", dataGps.Latitude);
+				printf("Vi do: %s\n", dataGps.Longtitude);
+				printf("Toc do: %s\n",dataGps.Speed);
+			}
+			//printf("%s\n", nmeaMessage.GPS_RX_Buffer);
+			Nmea_Line1 = 0; 
+			Nmea_Line2 = 1;
 			}
 		nmeaMessage.GPS_Flag = 0;
 		nmeaMessage.GPS_Counter = 0;
@@ -251,8 +257,8 @@ void Processing_$GPGRMC(){
 }
 
 
-void Processing_$GPVTG(void){
-	if(dong2 == 1){
+void Processing_$GPVTG(){
+	if(Nmea_Line2 == 1){
 	if (ch == '$'){
 		nmeaMessage.GPS_SCounter = 1;
 		nmeaMessage.GPS_VTG_Buffer[nmeaMessage.GPS_SCounter-1] = '$';
@@ -287,9 +293,9 @@ void Processing_$GPVTG(void){
 	}
 	if (ch == '*'){
 		if (nmeaMessage.GPS_SFlag == 3){
-			printf("%s\n", nmeaMessage.GPS_VTG_Buffer);
-			dong1 = 1;
-			dong2 = 0;
+			//printf("%s\n", nmeaMessage.GPS_VTG_Buffer);
+			Nmea_Line1 = 1;
+			Nmea_Line2 = 0;
 		}
 		nmeaMessage.GPS_SFlag = 0;
 		nmeaMessage.GPS_SCounter = 0;
@@ -311,8 +317,8 @@ void Processing_$GPVTG(void){
 void GPS_USART_RX_ISR(){
 	if(__HAL_UART_GET_FLAG(&huart1, UART_FLAG_RXNE) != RESET){
 		ch = (uint8_t)((&huart1)->Instance->DR & (uint8_t)0x00FF);
-		Processing_$GPGRMC();
 		Processing_$GPVTG();
+		Processing_$GPGRMC();
 	}
 }
 int main(void)
@@ -334,9 +340,6 @@ int main(void)
   while (1)
   {
 GPS_USART_RX_ISR();
-//		printf("Thuong\n");
-//		HAL_Delay(1000);
-
   }
 
 }
